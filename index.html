@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rubik's Cube - 3D Interactive</title>
-    
+
     <!-- Three.js for 3D rendering -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- GSAP for smooth animations -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    
+
     <style>
         * {
             margin: 0;
@@ -232,7 +232,7 @@
         <!-- Left side - 3D cube -->
         <div class="cube-container">
             <div id="canvas-wrapper"></div>
-            
+
             <div class="hint-overlay" id="rotation-hint">
                 🖱️ Drag to rotate view | ⌨️ Arrow keys to move faces
             </div>
@@ -253,7 +253,7 @@
 
             <div class="section-title">Pattern Samples</div>
             <p style="font-size: 13px; color: #aaa; margin-bottom: 15px;">Click a pattern to apply it:</p>
-            
+
             <div class="preset-grid" id="pattern-preset-buttons"></div>
 
             <div class="section-title">Keyboard Controls</div>
@@ -283,7 +283,7 @@
                 • Left drag - Rotate view around cube<br>
                 • Right click / Shift+drag - Pan cube position<br>
                 • Scroll wheel - Zoom in/out<br><br>
-                
+
                 <strong>Cube Axes:</strong><br>
                 • X-axis (red) = Left/Right faces<br>
                 • Y-axis (green) = Top/Bottom faces<br>
@@ -308,7 +308,7 @@
                 this.scene = null;
                 this.renderer = null;
                 this.raycaster = new THREE.Raycaster();
-                
+
                 // Mouse state
                 this.mouse = new THREE.Vector2();
                 this.isDragging = false;
@@ -326,17 +326,17 @@
                 const sceneSetup = () => {
                     this.scene = new THREE.Scene();
                     this.scene.background = new THREE.Color(0x1a1a2e);
-                    this.scene.fog = new THREE.Fog(0x1a1a2e, 50, 300);
 
                     const aspect = window.innerWidth * 2 / 3 / window.innerHeight;
                     this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
-                    this.camera.position.set(60, 50, 80);
+                    // Position camera to frame the cube properly at max 200px width
+                    this.camera.position.set(180, 130, 220);
                     this.camera.lookAt(0, 0, 0);
 
                     this.renderer = new THREE.WebGLRenderer({ antialias: true });
                     this.renderer.setSize(window.innerWidth * 2 / 3, window.innerHeight);
                     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-                    
+
                     const canvasWrapper = document.getElementById('canvas-wrapper');
                     canvasWrapper.innerHTML = '';
                     canvasWrapper.appendChild(this.renderer.domElement);
@@ -362,7 +362,7 @@
 
                 sceneSetup();
                 this.animate();
-                
+
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
                 }, 500);
@@ -374,56 +374,46 @@
                     this.cubies.forEach(cubie => {
                         cubie.material.forEach(mat => mat.dispose());
                     });
-                }
-
-                const cubies = [];
-                const colors = [0xff0000, 0xff8800, 0xffff00, 0xffffff, 0x00ff00, 0x0000ff];
-
-                for (let x = -1; x <= 1; x++) {
-                    for (let y = -1; y <= 1; y++) {
-                        for (let z = -1; z <= 1; z++) {
-                            const materials = colors.map(color => 
-                                new THREE.MeshBasicMaterial({ color: color })
-                            );
-
-                            // Face materials based on position
-                            materials[0] = x === 1 ? new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide }) :
-                                               x === -1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
-                                               new THREE.MeshLambertMaterial({ color: 0x222222 });
-
-                            materials[1] = x === -1 ? new THREE.MeshBasicMaterial({ color: 0xff8800, side: THREE.DoubleSide }) :
-                                                x === 1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
-                                                new THREE.MeshLambertMaterial({ color: 0x222222 });
-
-                            materials[2] = y === 1 ? new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide }) :
-                                                 y === -1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
-                                                 new THREE.MeshLambertMaterial({ color: 0x222222 });
-
-                            materials[3] = y === -1 ? new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }) :
-                                                   y === 1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
-                                                   new THREE.MeshLambertMaterial({ color: 0x222222 });
-
-                            materials[4] = z === 1 ? new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide }) :
-                                                     z === -1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
-                                                     new THREE.MeshLambertMaterial({ color: 0x222222 });
-
-                            materials[5] = z === -1 ? new THREE.MeshBasicMaterial({ color: 0x0000ff, side: THREE.DoubleSide }) :
-                                                        z === 1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
-                                                        new THREE.MeshLambertMaterial({ color: 0x222222 });
-
-                            const cubie = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materials);
-                            cubie.position.set(x, y, z);
-                            
-                            cubie.userData = { x, y, z };
-                            this.scene.add(cubie);
-                            cubies.push(cubie);
-                        }
-                    }
+                    this.cubies = [];
                 }
 
                 this.cube = new THREE.Group();
                 this.scene.add(this.cube);
-                this.cubies = cubies;
+
+                // Standard Rubik's cube face colors
+                const faceColors = [
+                    0xff0000,  // right (x+) - red
+                    0xff8800,  // left (x-) - orange
+                    0xffff00,  // top (y+) - yellow
+                    0xffffff,  // bottom (y-) - white
+                    0x00ff00,  // front (z+) - green
+                    0x0000ff   // back (z-) - blue
+                ];
+
+                const gap = 40;
+
+                for (let x = -1; x <= 1; x++) {
+                    for (let y = -1; y <= 1; y++) {
+                        for (let z = -1; z <= 1; z++) {
+                            const materials = [
+                                x === 1 ? new THREE.MeshPhongMaterial({ color: faceColors[0], shininess: 100 }) : new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 10 }),
+                                x === -1 ? new THREE.MeshPhongMaterial({ color: faceColors[1], shininess: 100 }) : new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 10 }),
+                                y === 1 ? new THREE.MeshPhongMaterial({ color: faceColors[2], shininess: 100 }) : new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 10 }),
+                                y === -1 ? new THREE.MeshPhongMaterial({ color: faceColors[3], shininess: 100 }) : new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 10 }),
+                                z === 1 ? new THREE.MeshPhongMaterial({ color: faceColors[4], shininess: 100 }) : new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 10 }),
+                                z === -1 ? new THREE.MeshPhongMaterial({ color: faceColors[5], shininess: 100 }) : new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 10 }),
+                            ];
+
+                            const geometry = new THREE.BoxGeometry(gap - 2, gap - 2, gap - 2);
+                            const cubie = new THREE.Mesh(geometry, materials);
+                            cubie.position.set(x * gap, y * gap, z * gap);
+                            
+                            cubie.userData = { gridX: x, gridY: y, gridZ: z };
+                            this.cube.add(cubie);
+                            this.cubies.push(cubie);
+                        }
+                    }
+                }
             }
 
             setupEventListeners() {
@@ -440,74 +430,39 @@
 
                 // Mouse events for rotation
                 const canvasWrapper = document.getElementById('canvas-wrapper');
-                
+                let lastMouseX = null;
+                let lastMouseY = null;
+
                 canvasWrapper.addEventListener('mousedown', (e) => {
                     this.isDragging = true;
-                    this.dragStartX = e.clientX;
-                    this.dragStartY = e.clientY;
-                    canvasWrapper.style.cursor = 'grabbing';
-                    
-                    const raycaster = new THREE.Raycaster();
-                    raycaster.setFromCamera({ x: (e.clientX / window.innerWidth) * 2 - 1, y: -(e.clientY / window.innerHeight) + 1 }, this.camera);
-                    const intersects = raycaster.intersectObjects([...this.scene.children].flat(3));
-                    
-                    document.body.style.cursor = intersects.length > 0 ? 'pointer' : 'grab';
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
+                    document.body.style.cursor = 'grabbing';
                 });
 
                 canvasWrapper.addEventListener('mousemove', (e) => {
-                    if (!this.isDragging && e.buttons !== 1) return;
-                    
-                    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-                    this.mouse.y = -(e.clientY / window.innerHeight) + 1;
+                    if (!this.isDragging || e.buttons !== 1) return;
 
-                    const isRightClick = e.button === 2 || (e.shiftKey && e.buttons === 1);
+                    const deltaX = e.clientX - lastMouseX;
+                    const deltaY = e.clientY - lastMouseY;
 
-                    if (!isRightClick) {
-                        document.body.style.cursor = 'grab';
-                    }
+                    // Rotate cube directly on mouse drag
+                    this.cube.rotation.y += deltaX * 0.01;
+                    this.cube.rotation.x += deltaY * 0.01;
 
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
                 });
 
-                canvasWrapper.addEventListener('mouseup', () => {
+                canvasWrapper.addEventListener('mouseup', (e) => {
                     if (this.isDragging) {
-                        // Reset drag start for next time
-                        if(!this.dragStartX || !this.dragStartY) { return; }
-                        const deltaX = this.mouse.x - this.dragStartX;
-                        const deltaY = this.mouse.y - this.dragStartY;
-
-                        let rotateAxis, rotateAmount;
-
-                        if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                            // Horizontal drag - rotate Y axis
-                            gsap.to(this.cube.rotation, {
-                                y: this.cube.rotation.y + deltaX * 0.5,
-                                duration: 1, ease: "power2.inOut"
-                            });
-
-                            if (this.activeLayer) {
-                                const direction = deltaX > 0 ? -1 : 1;
-                                gsap.to(this.cubies, {
-                                    rotationY: this.cubies.map(c => c.rotation.y + direction * Math.PI / 2),
-                                    duration: 0.5, ease: "power2.inOut"
-                                });
-                            }
-                        } else if (Math.abs(deltaY) > Math.abs(deltaX)) {
-                            // Vertical drag - rotate X axis
-                            gsap.to(this.cube.rotation, {
-                                x: this.cube.rotation.x + deltaY * 0.5,
-                                duration: 1, ease: "power2.inOut"
-                            });
-
-                            if (this.activeLayer) {
-                                const direction = deltaY > 0 ? -1 : 1;
-                                gsap.to(this.cubies, {
-                                    rotationX: this.cubies.map(c => c.rotation.x + direction * Math.PI / 2),
-                                    duration: 0.5, ease: "power2.inOut"
-                                });
-                            }
+                        // Check for right-click drag to rotate cube layers
+                        const isRightClick = e.button === 2 || (e.shiftKey && e.buttons === 1);
+                        
+                        if (!isRightClick) {
+                            this.isDragging = false;
+                            document.body.style.cursor = 'grab';
                         }
-
-                        this.isDragging = false;
                     }
                 });
 
@@ -522,7 +477,7 @@
 
                     const keyMap = {
                         'ArrowUp': 'y',
-                        'ArrowDown': 'y', 
+                        'ArrowDown': 'y',
                         'ArrowLeft': 'x',
                         'ArrowRight': 'x'
                     };
@@ -538,7 +493,7 @@
                     btn.addEventListener('click', () => {
                         const patternName = btn.dataset.pattern;
                         this.applyPattern(patternName);
-                        
+
                         document.querySelectorAll('[data-pattern]').forEach(b => b.classList.remove('active'));
                         btn.classList.add('active');
                     });
@@ -557,23 +512,65 @@
             rotateLayer(axis) {
                 const cubies = [...this.scene.children].filter(child => child instanceof THREE.Mesh);
                 
-                // Find layer to rotate based on current rotation
-                const offset = axis === 'x' ? 1 : (axis === 'y' ? 0.5 : 0.25);
-                const threshold = Math.abs(this.cube.rotation[axis] % (Math.PI * 2)) > offset;
-
+                // Find layer to rotate - use normalized position relative to cube center
+                const threshold = 15; // pixels from center plane
+                let selectedCubies = [];
+                
                 cubies.forEach(cubie => {
-                    if (cubie.userData.x > offset || cubie.userData.y > offset) {
-                        this.applyRotationToCubies(cubie, axis);
-                    }
+                    // Get world position (account for current rotation)
+                    const pos = new THREE.Vector3();
+                    cubie.getWorldPosition(pos);
+                    
+                    // Normalize by cube size to find which "layer" the cubie is in
+                    if (Math.abs(Math.round(pos.x / 40)) === 1) selectedCubies.push(cubie, 'x');
+                    else if (Math.abs(Math.round(pos.y / 40)) === 1) selectedCubies.push(cubie, 'y');
+                    else if (Math.abs(Math.round(pos.z / 40)) === 1) selectedCubies.push(cubie, 'z');
                 });
+
+                // Apply rotation to all cubies in the layer
+                const uniqueCubies = [...new Set(selectedCubies.filter(c => typeof c === 'object'))];
+                
+                if (uniqueCubies.length > 0) {
+                    gsap.to(uniqueCubies, {
+                        rotation: uniqueCubies.map(c => ({
+                            x: c.rotation.x + Math.PI / 2,
+                            y: c.rotation.y + Math.PI / 2,
+                            z: c.rotation.z + Math.PI / 2
+                        })),
+                        duration: 0.5, ease: "power2.inOut",
+                        onUpdate: (anim) => {
+                            // Update positions as they rotate
+                            uniqueCubies.forEach((cubie, i) => {
+                                const target = anim.targets[i];
+                                if (target) {
+                                    cubie.rotation.x = target.x;
+                                    cubie.rotation.y = target.y;
+                                    cubie.rotation.z = target.z;
+                                }
+                            });
+                        },
+                        onComplete: () => {
+                            // Snap positions to grid after rotation
+                            uniqueCubies.forEach((cubie, i) => {
+                                const pos = new THREE.Vector3();
+                                cubie.getWorldPosition(pos);
+                                
+                                // Round and snap to nearest layer position
+                                cubie.position.x = Math.round(pos.x / 40) * 40;
+                                cubie.position.y = Math.round(pos.y / 40) * 40;
+                                cubie.position.z = Math.round(pos.z / 40) * 40;
+                            });
+                        }
+                    });
+                }
             }
 
             applyRotationToCubies(cubie, axis) {
                 const rotationAmount = Math.PI / 2;
                 const direction = -1; // Counter-clockwise
-                
+
                 cubie.rotation[axis] += rotationAmount * direction;
-                
+
                 // Update position after rotation
                 if (axis === 'x') {
                     cubie.position.y -= Math.sin(rotationAmount) * cubie.scale.y;
@@ -615,7 +612,7 @@
             applyCrossPattern(cubies) {
                 cubies.forEach(cubie => {
                     const mats = cubie.material;
-                    
+
                     // Show white center on each face's outer side
                     if (cubie.position.x === 1) mats[0].color.setHex(0xffffff);
                     else if (cubie.position.y === 1) mats[2].color.setHex(0xffffff);
@@ -631,7 +628,7 @@
             applyCheckerboard(cubies) {
                 cubies.forEach((cubie, index) => {
                     const isEven = (index % 2 === 0 && Math.random() > 0.5);
-                    
+
                     if (isEven) {
                         cubie.material[1].color.setHex(0xff8800); // Orange left
                         cubie.material[3].color.setHex(0xffffff); // White bottom
@@ -683,10 +680,10 @@
                 cubies.forEach((cubie, index) => {
                     const angle = (index / 27) * Math.PI * 8;
                     const radius = 0.5 + (index % 9) * 0.1;
-                    
+
                     const x = Math.cos(angle) * radius;
                     const y = Math.sin(angle) * radius;
-                    
+
                     // Assign colors based on spiral position
                     if ((x > 0 && cubie.position.y > 0) || (y < -0.5)) {
                         cubie.material[2].color.setHex(0xff6b9d);
@@ -697,7 +694,7 @@
                     } else {
                         cubie.material.forEach(mat => mat.color.setHex(0xffffff));
                     }
-                    
+
                     cubie.userData.patternName = 'spiral';
                 });
             }
@@ -706,12 +703,12 @@
                 // Create a gradient from one corner to another
                 cubies.forEach((cubie, index) => {
                     const t = (index + 1) / (cubies.length + 1);
-                    
+
                     // Interpolate between two colors
                     const color1 = new THREE.Color(0xff6b9d);
                     const color2 = new THREE.Color(0x70e0f6);
                     const gradientColor = color1.clone().lerp(color2, t);
-                    
+
                     cubie.material.forEach(mat => {
                         mat.color.setHex(gradientColor.getHex());
                     });
@@ -724,7 +721,7 @@
                 // Solid color pattern - each face one color
                 cubies.forEach((cubie, index) => {
                     const colors = [0xff6b9d, 0x70e0f6, 0xfeca57, 0x48dbfb];
-                    
+
                     cubie.material[0].color.setHex(colors[index % 4]); // Right - Pinkish
                     cubie.material[1].color.setHex(colors[(index + 1) % 4]); // Left - Blue
                     cubie.material[2].color.setHex(colors[(index + 2) % 4]); // Top - Yellow
@@ -738,12 +735,12 @@
 
             resetToScrambled() {
                 const cubies = [...this.scene.children].filter(c => c instanceof THREE.Mesh);
-                
+
                 // Reset positions to grid
                 for (let x = -1; x <= 1; x++) {
                     for (let y = -1; y <= 1; y++) {
                         for (let z = -1; z <= 1; z++) {
-                            const cubie = cubies.find(c => 
+                            const cubie = cubies.find(c =>
                                 Math.abs(c.position.x - x) < 0.1 &&
                                 Math.abs(c.position.y - y) < 0.1 &&
                                 Math.abs(c.position.z - z) < 0.1
@@ -774,7 +771,7 @@
 
             shuffleCube(count = 10) {
                 const axes = ['x', 'y', 'z'];
-                
+
                 for (let i = 0; i < count; i++) {
                     const axis = axes[Math.floor(Math.random() * axes.length)];
                     const cubies = [...this.scene.children].filter(c => c instanceof THREE.Mesh);
