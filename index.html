@@ -291,7 +291,7 @@
             </div>
 
             <button id="reset-btn" style="margin-top: 30px; padding: 12px 30px; background: linear-gradient(145deg, #e94560, #c73e54); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;">
-                Reset to Scrambled State
+                Reset Cube
             </button>
 
             <button id="shuffle-btn" style="margin-top: 10px; padding: 12px 30px; background: linear-gradient(145deg, #4ecca3, #3db892); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;">
@@ -407,13 +407,33 @@
                             const geometry = new THREE.BoxGeometry(gap - 2, gap - 2, gap - 2);
                             const cubie = new THREE.Mesh(geometry, materials);
                             cubie.position.set(x * gap, y * gap, z * gap);
-                            
+
                             cubie.userData = { gridX: x, gridY: y, gridZ: z };
                             this.cube.add(cubie);
                             this.cubies.push(cubie);
                         }
                     }
                 }
+
+                // Store initial rotation for each cubie
+                this.cubies.forEach(cubie => {
+                    cubie.userData = {
+                        ...cubie.userData,
+                        initialX: cubie.userData.gridX,
+                        initialY: cubie.userData.gridY,
+                        initialZ: cubie.userData.gridZ,
+                        rotX: 0,
+                        rotY: 0,
+                        rotZ: 0,
+                        // Track which world direction each material faces
+                        matX: {x:1,y:0,z:0},  // material[0] faces +X
+                        matY: {x:0,y:1,z:0},  // material[1] faces -X
+                        matZ: {x:0,y:0,z:1},  // material[2] faces +Y
+                        matW: {x:0,y:0,z:-1}, // material[3] faces -Y
+                        matW2:{x:0,y:1,z:0},  // material[4] faces +Z
+                        matW3:{x:0,y:-1,z:0}  // material[5] faces -Z
+                    };
+                });
             }
 
             setupEventListeners() {
@@ -422,7 +442,7 @@
                     const aspect = (window.innerWidth * 2 / 3) / window.innerHeight;
                     this.camera.aspect = aspect;
                     this.camera.updateProjectionMatrix();
-                    
+
                     if (this.renderer) {
                         this.renderer.setSize(window.innerWidth * 2 / 3, window.innerHeight);
                     }
@@ -458,7 +478,7 @@
                     if (this.isDragging) {
                         // Check for right-click drag to rotate cube layers
                         const isRightClick = e.button === 2 || (e.shiftKey && e.buttons === 1);
-                        
+
                         if (!isRightClick) {
                             this.isDragging = false;
                             document.body.style.cursor = 'grab';
@@ -471,20 +491,35 @@
                     document.body.style.cursor = 'grab';
                 });
 
+                // Mouse wheel for zoom
+                canvasWrapper.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+                    const newPos = this.camera.position.clone().multiplyScalar(zoomFactor);
+                    
+                    // Clamp zoom distance
+                    const minDist = 150;
+                    const maxDist = 500;
+                    const dist = newPos.length();
+                    if (dist > minDist && dist < maxDist) {
+                        this.camera.position.copy(newPos);
+                    }
+                }, { passive: false });
+
                 // Keyboard controls
                 window.addEventListener('keydown', (e) => {
                     if (this.isAnimating) return;
 
                     const keyMap = {
-                        'ArrowUp': 'y',
-                        'ArrowDown': 'y',
-                        'ArrowLeft': 'x',
-                        'ArrowRight': 'x'
+                        'ArrowUp': ['y', -1],
+                        'ArrowDown': ['y', 1],
+                        'ArrowLeft': ['x', -1],
+                        'ArrowRight': ['x', 1]
                     };
 
-                    const axis = keyMap[e.key];
-                    if (axis) {
-                        this.rotateLayer(axis);
+                    const entry = keyMap[e.key];
+                    if (entry) {
+                        this.rotateLayer(entry[0], entry[1]);
                     }
                 });
 
@@ -509,59 +544,183 @@
                 });
             }
 
-            rotateLayer(axis) {
-                const cubies = [...this.scene.children].filter(child => child instanceof THREE.Mesh);
-                
-                // Find layer to rotate - use normalized position relative to cube center
-                const threshold = 15; // pixels from center plane
-                let selectedCubies = [];
-                
-                cubies.forEach(cubie => {
-                    // Get world position (account for current rotation)
-                    const pos = new THREE.Vector3();
-                    cubie.getWorldPosition(pos);
-                    
-                    // Normalize by cube size to find which "layer" the cubie is in
-                    if (Math.abs(Math.round(pos.x / 40)) === 1) selectedCubies.push(cubie, 'x');
-                    else if (Math.abs(Math.round(pos.y / 40)) === 1) selectedCubies.push(cubie, 'y');
-                    else if (Math.abs(Math.round(pos.z / 40)) === 1) selectedCubies.push(cubie, 'z');
-                });
+            rotateLayer(axis, direction = 1) {
+                const gap = 40;
 
-                // Apply rotation to all cubies in the layer
-                const uniqueCubies = [...new Set(selectedCubies.filter(c => typeof c === 'object'))];
+                // Get cubies from cube group
+                const cubies = this.cubies.slice();
+                let layerCubies = [];
+
+                if (axis === 'x') {
+                    layerCubies = cubies.filter(c => Math.abs(c.userData.gridX - direction) < 0.1);
+                } else if (axis === 'y') {
+                    layerCubies = cubies.filter(c => Math.abs(c.userData.gridY - direction) < 0.1);
+                } else if (axis === 'z') {
+                    layerCubies = cubies.filter(c => Math.abs(c.userData.gridZ - direction) < 0.1);
+                }
+
+                if (layerCubies.length === 0) return;
+
+                // Rotate around the cubie's own axis
+                const angle = Math.PI / 2 * direction;
+                layerCubies.forEach(cubie => {
+                    cubie.rotation[axis] += angle;
+
+                    // Update grid position using exact integer rotation matrix
+                    // No floating-point accumulation — just swap coordinates with sign flips
+                    const oldX = cubie.userData.gridX;
+                    const oldY = cubie.userData.gridY;
+                    const oldZ = cubie.userData.gridZ;
+                    const d = direction;
+
+                    if (axis === 'x') {
+                        cubie.userData.gridY = -oldZ * d;
+                        cubie.userData.gridZ =  oldY * d;
+                    } else if (axis === 'y') {
+                        cubie.userData.gridX =  oldZ * d;
+                        cubie.userData.gridZ = -oldX * d;
+                    } else if (axis === 'z') {
+                        cubie.userData.gridX = -oldY * d;
+                        cubie.userData.gridY =  oldX * d;
+                    }
+                    
+                    // Update material-to-direction mapping
+                    this.updateMaterialMapping(cubie, axis, direction);
+                });
+            }
+
+            updateMaterialMapping(cubie, axis, direction) {
+                const mats = {
+                    x: {x:1,y:0,z:0},    // material[0] faces +X
+                    y: {x:0,y:1,z:0},    // material[1] faces -X  
+                    z: {x:0,y:0,z:1},    // material[2] faces +Y
+                    w: {x:0,y:0,z:-1},   // material[3] faces -Y
+                    w2:{x:0,y:1,z:0},   // material[4] faces +Z
+                    w3:{x:0,y:-1,z:0}   // material[5] faces -Z
+                };
+
+                // Apply rotation to material directions
+                const rot90 = (a, b, c, d) => a*d - c*b;
+                const rotM90 = (a, b, c, d) => -a*d + c*b;
+
+                if (axis === 'x') {
+                    // Rotate around X axis
+                    // material[2] (+Y) -> +/-Z, material[3] (-Y) -> +/-Z
+                    // material[4] (+Z) -> +/-Y, material[5] (-Z) -> +/-Y
+                    const new2 = {x: mats.z.x, y: direction * mats.w2.y, z: direction * mats.w2.z};
+                    const new3 = {x: mats.w.x, y: -direction * mats.w.y, z: direction * mats.w.z};
+                    const new4 = {x: mats.w2.x, y: direction * mats.w2.y, z: -direction * mats.w2.z};
+                    const new5 = {x: mats.w3.x, y: -direction * mats.w3.y, z: -direction * mats.w3.z};
+                    
+                    cubie.userData.matX = mats.x;
+                    cubie.userData.matY = mats.y;
+                    cubie.userData.matZ = new2;
+                    cubie.userData.matW = new3;
+                    cubie.userData.matW2 = new4;
+                    cubie.userData.matW3 = new5;
+                } else if (axis === 'y') {
+                    // Rotate around Y axis
+                    // material[0] (+X) -> +/-Z, material[1] (-X) -> +/-Z
+                    // material[4] (+Z) -> +/-X, material[5] (-Z) -> +/-X
+                    const new0 = {x: direction * mats.w2.x, y: direction * mats.w2.y, z: -direction * mats.w2.z};
+                    const new1 = {x: -direction * mats.w3.x, y: -direction * mats.w3.y, z: direction * mats.w3.z};
+                    const new4 = {x: -direction * mats.x.x, y: direction * mats.x.y, z: direction * mats.x.z};
+                    const new5 = {x: direction * mats.y.x, y: -direction * mats.y.y, z: -direction * mats.y.z};
+                    
+                    cubie.userData.matX = new0;
+                    cubie.userData.matY = new1;
+                    cubie.userData.matZ = mats.z;
+                    cubie.userData.matW = mats.w;
+                    cubie.userData.matW2 = new4;
+                    cubie.userData.matW3 = new5;
+                } else if (axis === 'z') {
+                    // Rotate around Z axis
+                    // material[0] (+X) -> +/-Y, material[1] (-X) -> +/-Y
+                    // material[2] (+Y) -> +/-X, material[3] (-Y) -> +/-X
+                    const new0 = {x: direction * mats.w2.x, y: -direction * mats.w2.y, z: direction * mats.w2.z};
+                    const new1 = {x: -direction * mats.w3.x, y: direction * mats.w3.y, z: -direction * mats.w3.z};
+                    const new2 = {x: -direction * mats.y.x, y: direction * mats.y.y, z: direction * mats.y.z};
+                    const new3 = {x: direction * mats.x.x, y: -direction * mats.x.y, z: -direction * mats.x.z};
+                    
+                    cubie.userData.matX = new0;
+                    cubie.userData.matY = new1;
+                    cubie.userData.matZ = new2;
+                    cubie.userData.matW = new3;
+                    cubie.userData.matW2 = mats.w2;
+                    cubie.userData.matW3 = mats.w3;
+                }
+            }
+
+            updateCubieColors(cubie) {
+                const mats = cubie.material;
                 
-                if (uniqueCubies.length > 0) {
-                    gsap.to(uniqueCubies, {
-                        rotation: uniqueCubies.map(c => ({
-                            x: c.rotation.x + Math.PI / 2,
-                            y: c.rotation.y + Math.PI / 2,
-                            z: c.rotation.z + Math.PI / 2
-                        })),
-                        duration: 0.5, ease: "power2.inOut",
-                        onUpdate: (anim) => {
-                            // Update positions as they rotate
-                            uniqueCubies.forEach((cubie, i) => {
-                                const target = anim.targets[i];
-                                if (target) {
-                                    cubie.rotation.x = target.x;
-                                    cubie.rotation.y = target.y;
-                                    cubie.rotation.z = target.z;
-                                }
-                            });
-                        },
-                        onComplete: () => {
-                            // Snap positions to grid after rotation
-                            uniqueCubies.forEach((cubie, i) => {
-                                const pos = new THREE.Vector3();
-                                cubie.getWorldPosition(pos);
-                                
-                                // Round and snap to nearest layer position
-                                cubie.position.x = Math.round(pos.x / 40) * 40;
-                                cubie.position.y = Math.round(pos.y / 40) * 40;
-                                cubie.position.z = Math.round(pos.z / 40) * 40;
-                            });
-                        }
-                    });
+                // Reset to dark
+                mats.forEach(mat => mat.color.setHex(0x111111));
+                
+                // For each world direction, check which material faces it
+                // and apply the appropriate color
+                const faceColors = {
+                    'x+:0xff0000', 'x-:0xff8800',
+                    'y+:0xffff00', 'y-:0xffffff', 
+                    'z+:0x00ff00', 'z-:0x0000ff'
+                };
+                
+                const gx = cubie.userData.gridX;
+                const gy = cubie.userData.gridY;
+                const gz = cubie.userData.gridZ;
+
+                if (gx === 1) {
+                    const mat = cubie.userData.matX;
+                    if (mat.x === 1) mats[0].color.setHex(0xff0000);
+                    if (mat.y === 1) mats[1].color.setHex(0xffff00);
+                    if (mat.z === 1) mats[2].color.setHex(0x00ff00);
+                    if (mat.w === 1) mats[3].color.setHex(0xffffff);
+                    if (mat.w2 === 1) mats[4].color.setHex(0x00ff00);
+                    if (mat.w3 === 1) mats[5].color.setHex(0x0000ff);
+                } else if (gx === -1) {
+                    const mat = cubie.userData.matY;
+                    if (mat.x === -1) mats[0].color.setHex(0xff8800);
+                    if (mat.y === -1) mats[1].color.setHex(0xffff00);
+                    if (mat.z === -1) mats[2].color.setHex(0x00ff00);
+                    if (mat.w === -1) mats[3].color.setHex(0xffffff);
+                    if (mat.w2 === -1) mats[4].color.setHex(0x00ff00);
+                    if (mat.w3 === -1) mats[5].color.setHex(0x0000ff);
+                }
+                
+                if (gy === 1) {
+                    const mat = cubie.userData.matZ;
+                    if (mat.x === 1) mats[0].color.setHex(0xffff00);
+                    if (mat.y === 1) mats[1].color.setHex(0xff8800);
+                    if (mat.z === 1) mats[2].color.setHex(0xffff00);
+                    if (mat.w === 1) mats[3].color.setHex(0xff8800);
+                    if (mat.w2 === 1) mats[4].color.setHex(0xffff00);
+                    if (mat.w3 === 1) mats[5].color.setHex(0xff8800);
+                } else if (gy === -1) {
+                    const mat = cubie.userData.matW;
+                    if (mat.x === -1) mats[0].color.setHex(0xffffff);
+                    if (mat.y === -1) mats[1].color.setHex(0xff8800);
+                    if (mat.z === -1) mats[2].color.setHex(0xffffff);
+                    if (mat.w === -1) mats[3].color.setHex(0xff8800);
+                    if (mat.w2 === -1) mats[4].color.setHex(0xffffff);
+                    if (mat.w3 === -1) mats[5].color.setHex(0xff8800);
+                }
+                
+                if (gz === 1) {
+                    const mat = cubie.userData.matW2;
+                    if (mat.x === 1) mats[0].color.setHex(0x00ff00);
+                    if (mat.y === 1) mats[1].color.setHex(0x00ff00);
+                    if (mat.z === 1) mats[2].color.setHex(0x00ff00);
+                    if (mat.w === 1) mats[3].color.setHex(0x00ff00);
+                    if (mat.w2 === 1) mats[4].color.setHex(0x00ff00);
+                    if (mat.w3 === 1) mats[5].color.setHex(0x00ff00);
+                } else if (gz === -1) {
+                    const mat = cubie.userData.matW3;
+                    if (mat.x === -1) mats[0].color.setHex(0x0000ff);
+                    if (mat.y === -1) mats[1].color.setHex(0x0000ff);
+                    if (mat.z === -1) mats[2].color.setHex(0x0000ff);
+                    if (mat.w === -1) mats[3].color.setHex(0x0000ff);
+                    if (mat.w2 === -1) mats[4].color.setHex(0x0000ff);
+                    if (mat.w3 === -1) mats[5].color.setHex(0x0000ff);
                 }
             }
 
@@ -611,68 +770,61 @@
 
             applyCrossPattern(cubies) {
                 cubies.forEach(cubie => {
+                    const gx = cubie.userData.gridX;
+                    const gy = cubie.userData.gridY;
+                    const gz = cubie.userData.gridZ;
                     const mats = cubie.material;
 
-                    // Show white center on each face's outer side
-                    if (cubie.position.x === 1) mats[0].color.setHex(0xffffff);
-                    else if (cubie.position.y === 1) mats[2].color.setHex(0xffffff);
-                    else if (cubie.position.z === -1) mats[5].color.setHex(0xffffff);
+                    // Reset to default
+                    mats.forEach(mat => mat.color.setHex(0x222222));
 
-                    // Color the outer faces with cross pattern colors
-                    if (cubie.position.x === 1) mats[0].color.setHex(0xff0000);
-                    if (cubie.position.y === 1) mats[2].color.setHex(0xffff00);
-                    if (cubie.position.z === -1) mats[5].color.setHex(0x0000ff);
+                    // Apply cross pattern
+                    if (gx === 1) mats[0].color.setHex(0xff0000);
+                    if (gx === -1) mats[1].color.setHex(0xff8800);
+                    if (gy === 1) mats[2].color.setHex(0xffff00);
+                    if (gy === -1) mats[3].color.setHex(0xffffff);
+                    if (gz === 1) mats[4].color.setHex(0x00ff00);
+                    if (gz === -1) mats[5].color.setHex(0x0000ff);
                 });
             }
 
             applyCheckerboard(cubies) {
                 cubies.forEach((cubie, index) => {
-                    const isEven = (index % 2 === 0 && Math.random() > 0.5);
+                    const gx = cubie.userData.gridX;
+                    const gy = cubie.userData.gridY;
+                    const isEven = (gx + gy) % 2 === 0;
 
-                    if (isEven) {
-                        cubie.material[1].color.setHex(0xff8800); // Orange left
-                        cubie.material[3].color.setHex(0xffffff); // White bottom
-                        cubie.material[4].color.setHex(0x00ff00); // Green front
-                    } else {
-                        cubie.material[1].color.setHex(0x333333);
-                        cubie.material[3].color.setHex(0xffff00);
-                        cubie.material[4].color.setHex(0x0000ff);
-                    }
+                    cubie.material.forEach(mat => mat.color.setHex(0x222222));
 
-                    cubie.userData.patternName = 'checker';
+                    if (gx === 1 && isEven) cubie.material[0].color.setHex(0xff0000);
+                    if (gx === -1 && isEven) cubie.material[1].color.setHex(0xff8800);
+                    if (gy === 1 && isEven) cubie.material[2].color.setHex(0xffff00);
+                    if (gy === -1 && isEven) cubie.material[3].color.setHex(0xffffff);
+                    if (gz === 1 && isEven) cubie.material[4].color.setHex(0x00ff00);
+                    if (gx === 1 && !isEven) cubie.material[0].color.setHex(0x333333);
+                    if (gx === -1 && !isEven) cubie.material[1].color.setHex(0xffff00);
+                    if (gy === 1 && !isEven) cubie.material[2].color.setHex(0x0000ff);
                 });
+
+                cubies.forEach(c => c.userData.patternName = 'checker');
             }
 
             applyLinesPattern(cubies) {
-                // Create line patterns on faces
-                const patterns = [
-                    { x: 1, y: [-1, 0], z: null },
-                    { x: -1, y: [-1, 0], z: null },
-                    { x: null, y: 1, x: [-1, 0] },
-                    { x: null, y: -1, x: [-1, 0] }
-                ];
-
-                patterns.forEach(pos => {
-                    cubies.forEach(cubie => {
-                        if (pos.x !== null && cubie.position.x === pos.x) {
-                            if ((Math.abs(cubie.position.y) + Math.abs(cubie.position.z)) % 2 === 0) {
-                                cubie.material[0].color.setHex(0xffffff);
-                            } else {
-                                cubie.material[0].color.setHex(0x333333);
-                            }
-                        }
-                    });
-                });
-
-                // Apply to other faces too
                 cubies.forEach(cubie => {
-                    if (cubie.position.y === 1) cubie.material[2].color.setHex(0xffffff);
-                    if (cubie.position.z === -1) cubie.material[5].color.setHex(0xffffff);
-                });
+                    const gx = cubie.userData.gridX;
+                    const gy = cubie.userData.gridY;
+                    const gz = cubie.userData.gridZ;
+                    const mats = cubie.material;
+                    mats.forEach(m => m.color.setHex(0x222222));
 
-                cubies.forEach(cubie => {
-                    cubie.userData.patternName = 'lines';
+                    if (gx === 1) mats[0].color.setHex((gy + gz) % 2 === 0 ? 0xffffff : 0x444444);
+                    if (gx === -1) mats[1].color.setHex((gy + gz) % 2 === 0 ? 0xffffff : 0x444444);
+                    if (gy === 1) mats[2].color.setHex(0xffffff);
+                    if (gy === -1) mats[3].color.setHex(0xffffff);
+                    if (gz === 1) mats[4].color.setHex(0xffffff);
+                    if (gz === -1) mats[5].color.setHex(0xffffff);
                 });
+                cubies.forEach(c => c.userData.patternName = 'lines');
             }
 
             applySpiralPattern(cubies) {
@@ -734,68 +886,27 @@
             }
 
             resetToScrambled() {
-                const cubies = [...this.scene.children].filter(c => c instanceof THREE.Mesh);
-
-                // Reset positions to grid
-                for (let x = -1; x <= 1; x++) {
-                    for (let y = -1; y <= 1; y++) {
-                        for (let z = -1; z <= 1; z++) {
-                            const cubie = cubies.find(c =>
-                                Math.abs(c.position.x - x) < 0.1 &&
-                                Math.abs(c.position.y - y) < 0.1 &&
-                                Math.abs(c.position.z - z) < 0.1
-                            );
-
-                            if (cubie) {
-                                gsap.to(cubie.rotation, {
-                                    x: cubie.userData.x * Math.PI / 2,
-                                    y: cubie.userData.y * Math.PI / 2,
-                                    z: cubie.userData.z * Math.PI / 2,
-                                    duration: 0.5, ease: "power2.inOut"
-                                });
-
-                                gsap.to(cubie.position, {
-                                    x: x, y: y, z: z,
-                                    duration: 0.5, ease: "power2.inOut",
-                                    onComplete: () => {
-                                        cubie.rotation.set(0, 0, 0);
-                                        cubie.position.set(x, y, z);
-                                        cubie.material.forEach(mat => mat.color.setHex(0x222222));
-                                    }
-                                });
-                            }
-                        }
-                    }
-                }
+                // Rebuild the cube to restore solved state with correct materials
+                this.createCube();
+                this.cube.rotation.set(0, 0, 0);
             }
 
-            shuffleCube(count = 10) {
+            shuffleCube(count = 20) {
                 const axes = ['x', 'y', 'z'];
-
+                const directions = [-1, 1];
+                
+                // Disable event listeners during shuffle
+                this.isAnimating = true;
+                
                 for (let i = 0; i < count; i++) {
                     const axis = axes[Math.floor(Math.random() * axes.length)];
-                    const cubies = [...this.scene.children].filter(c => c instanceof THREE.Mesh);
-
-                    cubies.forEach((cubie, index) => {
-                        if (Math.random() > 0.3) {
-                            this.applyRotationToCubies(cubie, axis);
-                        }
-                    });
-
-                    // Animate camera movement during shuffle
-                    gsap.to(this.camera.position, {
-                        x: 60 + Math.sin(i * 0.5) * 20,
-                        y: 50 + Math.cos(i * 0.3) * 15,
-                        z: 80 + Math.random() * 20,
-                        duration: 0.3
-                    });
+                    const direction = directions[Math.floor(Math.random() * directions.length)];
+                    this.rotateLayer(axis, direction);
                 }
-
-                // Return camera to original position
-                gsap.to(this.camera.position, {
-                    x: 60, y: 50, z: 80,
-                    duration: 1, ease: "power2.out"
-                });
+                
+                setTimeout(() => {
+                    this.isAnimating = false;
+                }, count * 50 + 500);
             }
 
             animate() {
