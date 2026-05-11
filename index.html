@@ -321,19 +321,6 @@
 
                 this.init();
             }
-                
-                // Mouse state
-                this.mouse = new THREE.Vector2();
-                this.isDragging = false;
-                this.dragStartX = 0;
-                this.dragStartY = 0;
-
-                // Animation state
-                this.isAnimating = false;
-                this.animationProgress = {};
-
-                this.init();
-            }
 
             init() {
                 const sceneSetup = () => {
@@ -374,6 +361,7 @@
                 };
 
                 sceneSetup();
+                this.animate();
                 
                 setTimeout(() => {
                     document.getElementById('loading').style.display = 'none';
@@ -434,7 +422,6 @@
                 }
 
                 this.cube = new THREE.Group();
-                this.cube.position.set(-150, -50, 40);
                 this.scene.add(this.cube);
                 this.cubies = cubies;
             }
@@ -479,9 +466,6 @@
                         document.body.style.cursor = 'grab';
                     }
 
-                    // Update status
-                    const rotationMode = this.isAnimating ? 'Animating...' : (this.activeLayer ? `Rotating: ${this.activeLayer}` : 'Idle');
-                    document.getElementById('rotation-mode').textContent = rotationMode;
                 });
 
                 canvasWrapper.addEventListener('mouseup', () => {
