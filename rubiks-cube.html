@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rubik's Cube - 3D Interactive</title>
+    
+    <!-- Three.js for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GSAP for smooth animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Left side - Cube container */
+        .cube-container {
+            flex: 2;
+            position: relative;
+            background: rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        #canvas-wrapper {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+
+        #canvas-wrapper.dragging {
+            cursor: grabbing;
+        }
+
+        .hint-overlay {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+        }
+
+        /* Right side - Presets panel */
+        .presets-panel {
+            flex: 1;
+            padding: 30px;
+            background: rgba(26, 26, 46, 0.95);
+            border-left: 2px solid rgba(255, 255, 255, 0.1);
+            overflow-y: auto;
+        }
+
+        .presets-panel h2 {
+            margin-bottom: 20px;
+            font-size: 24px;
+            color: #e94560;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            color: #888;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            max-width: 400px;
+            margin-bottom: 30px;
+        }
+
+        .preset-btn {
+            aspect-ratio: 1;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .preset-btn:hover {
+            border-color: #e94560;
+            background: linear-gradient(145deg, rgba(233, 69, 96, 0.2), rgba(233, 69, 96, 0.1));
+            transform: scale(1.05);
+        }
+
+        .preset-btn.active {
+            border-color: #4ecca3;
+            background: linear-gradient(145deg, rgba(78, 204, 163, 0.3), rgba(78, 204, 163, 0.1));
+        }
+
+        .keyboard-section {
+            margin-top: 30px;
+        }
+
+        .key-bindings {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+
+        .key-binding {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .key-binding .keys {
+            display: flex;
+            gap: 3px;
+            margin-right: 12px;
+        }
+
+        .key {
+            padding: 5px 10px;
+            background: linear-gradient(145deg, #e94560, #c73e54);
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            min-width: 28px;
+        }
+
+        .key-binding span {
+            color: #aaa;
+        }
+
+        /* Status bar */
+        .status-bar {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            backdrop-filter: blur(5px);
+        }
+
+        .status-bar span {
+            color: #4ecca3;
+        }
+
+        /* Instructions */
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .instructions strong {
+            color: #e94560;
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(233, 69, 96, 0.3);
+            border-top-color: #e94560;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        .loading-text {
+            margin-left: 20px;
+            font-size: 18px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loading">
+        <div style="display: flex; align-items: center;">
+            <div class="spinner"></div>
+            <span class="loading-text">Loading Rubik's Cube...</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Left side - 3D cube -->
+        <div class="cube-container">
+            <div id="canvas-wrapper"></div>
+            
+            <div class="hint-overlay" id="rotation-hint">
+                🖱️ Drag to rotate view | ⌨️ Arrow keys to move faces
+            </div>
+
+            <div class="controls-overlay" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; padding: 15px; background: rgba(0, 0, 0, 0.6); border-radius: 12px;">
+                <button class="preset-btn" data-pattern="cross">↻ Cross</button>
+                <button class="preset-btn" data-pattern="checker">🔲 Checker</button>
+                <button class="preset-btn" data-pattern="lines">▦ Lines</button>
+                <button class="preset-btn" data-pattern="spiral">🌀 Spiral</button>
+                <button class="preset-btn" data-pattern="gradient">🌈 Gradient</button>
+                <button class="preset-btn" data-pattern="solid">🎨 Solid</button>
+            </div>
+        </div>
+
+        <!-- Right side - Presets and controls -->
+        <div class="presets-panel">
+            <h2>Presets & Controls</h2>
+
+            <div class="section-title">Pattern Samples</div>
+            <p style="font-size: 13px; color: #aaa; margin-bottom: 15px;">Click a pattern to apply it:</p>
+            
+            <div class="preset-grid" id="pattern-preset-buttons"></div>
+
+            <div class="section-title">Keyboard Controls</div>
+            <div class="keyboard-section">
+                <div class="key-bindings">
+                    <div class="key-binding">
+                        <span class="keys"><span class="key">↑</span></span>
+                        <span>Rotate up layer</span>
+                    </div>
+                    <div class="key-binding">
+                        <span class="keys"><span class="key">↓</span></span>
+                        <span>Rotate down layer</span>
+                    </div>
+                    <div class="key-binding">
+                        <span class="keys"><span class="key">←</span></span>
+                        <span>Rotate left layer</span>
+                    </div>
+                    <div class="key-binding">
+                        <span class="keys"><span class="key">→</span></span>
+                        <span>Rotate right layer</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="instructions" style="margin-top: 20px;">
+                <strong>Mouse Controls:</strong><br>
+                • Left drag - Rotate view around cube<br>
+                • Right click / Shift+drag - Pan cube position<br>
+                • Scroll wheel - Zoom in/out<br><br>
+                
+                <strong>Cube Axes:</strong><br>
+                • X-axis (red) = Left/Right faces<br>
+                • Y-axis (green) = Top/Bottom faces<br>
+                • Z-axis (blue) = Front/Back faces
+            </div>
+
+            <button id="reset-btn" style="margin-top: 30px; padding: 12px 30px; background: linear-gradient(145deg, #e94560, #c73e54); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                Reset to Scrambled State
+            </button>
+
+            <button id="shuffle-btn" style="margin-top: 10px; padding: 12px 30px; background: linear-gradient(145deg, #4ecca3, #3db892); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold;">
+                Shuffle Cube Randomly
+            </button>
+        </div>
+    </div>
+
+    <script>
+        class RubiksCube {
+            constructor() {
+                this.cube = null;
+                this.cubies = [];
+                this.scene = null;
+                this.renderer = null;
+                this.raycaster = new THREE.Raycaster();
+                
+                // Mouse state
+                this.isDragging = false;
+                this.dragStart = { x: 0, y: 0 };
+
+                // Animation state
+                this.isAnimating = false;
+                this.animationProgress = {};
+
+                this.init();
+            }
+
+            init() {
+                const sceneSetup = () => {
+                    this.scene = new THREE.Scene();
+                    this.scene.background = new THREE.Color(0x1a1a2e);
+                    this.scene.fog = new THREE.Fog(0x1a1a2e, 50, 300);
+
+                    const aspect = window.innerWidth * 2 / 3 / window.innerHeight;
+                    this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+                    this.camera.position.set(60, 50, 80);
+                    this.camera.lookAt(0, 0, 0);
+
+                    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                    this.renderer.setSize(window.innerWidth * 2 / 3, window.innerHeight);
+                    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                    
+                    const canvasWrapper = document.getElementById('canvas-wrapper');
+                    canvasWrapper.innerHTML = '';
+                    canvasWrapper.appendChild(this.renderer.domElement);
+
+                    // Lighting
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                    this.scene.add(ambientLight);
+
+                    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                    directionalLight.position.set(50, 100, 50);
+                    this.scene.add(directionalLight);
+
+                    const pointLight = new THREE.PointLight(0xe94560, 0.5);
+                    pointLight.position.set(-30, -30, -30);
+                    this.scene.add(pointLight);
+
+                    // Create cube
+                    this.createCube();
+
+                    // Event listeners
+                    this.setupEventListeners();
+                };
+
+                sceneSetup();
+                
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 500);
+            }
+
+            createCube() {
+                if (this.cube) {
+                    this.scene.remove(this.cube);
+                    this.cubies.forEach(cubie => {
+                        cubie.material.forEach(mat => mat.dispose());
+                    });
+                }
+
+                const cubies = [];
+                const colors = [0xff0000, 0xff8800, 0xffff00, 0xffffff, 0x00ff00, 0x0000ff];
+
+                for (let x = -1; x <= 1; x++) {
+                    for (let y = -1; y <= 1; y++) {
+                        for (let z = -1; z <= 1; z++) {
+                            const materials = colors.map(color => 
+                                new THREE.MeshBasicMaterial({ color: color })
+                            );
+
+                            // Face materials based on position
+                            materials[0] = x === 1 ? new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide }) :
+                                               x === -1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
+                                               new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+                            materials[1] = x === -1 ? new THREE.MeshBasicMaterial({ color: 0xff8800, side: THREE.DoubleSide }) :
+                                                x === 1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
+                                                new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+                            materials[2] = y === 1 ? new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide }) :
+                                                 y === -1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
+                                                 new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+                            materials[3] = y === -1 ? new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }) :
+                                                   y === 1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
+                                                   new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+                            materials[4] = z === 1 ? new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide }) :
+                                                     z === -1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
+                                                     new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+                            materials[5] = z === -1 ? new THREE.MeshBasicMaterial({ color: 0x0000ff, side: THREE.DoubleSide }) :
+                                                        z === 1 ? new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.BackSide }) :
+                                                        new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+                            const cubie = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materials);
+                            cubie.position.set(x, y, z);
+                            
+                            cubie.userData = { x, y, z };
+                            this.scene.add(cubie);
+                            cubies.push(cubie);
+                        }
+                    }
+                }
+
+                this.cube = new THREE.Group();
+                this.cube.position.set(-150, -50, 40);
+                this.scene.add(this.cube);
+                this.cubies = cubies;
+            }
+
+            setupEventListeners() {
+                // Window resize
+                window.addEventListener('resize', () => {
+                    const aspect = (window.innerWidth * 2 / 3) / window.innerHeight;
+                    this.camera.aspect = aspect;
+                    this.camera.updateProjectionMatrix();
+                    
+                    if (this.renderer) {
+                        this.renderer.setSize(window.innerWidth * 2 / 3, window.innerHeight);
+                    }
+                });
+
+                // Mouse events for rotation
+                const canvasWrapper = document.getElementById('canvas-wrapper');
+                
+                canvasWrapper.addEventListener('mousedown', (e) => {
+                    this.isDragging = true;
+                    this.dragStart.x = e.clientX;
+                    this.dragStart.y = e.clientY;
+                    canvasWrapper.style.cursor = 'grabbing';
+                    
+                    const raycaster = new THREE.Raycaster();
+                    raycaster.setFromCamera({ x: (e.clientX / window.innerWidth) * 2 - 1, y: -(e.clientY / window.innerHeight) + 1 }, this.camera);
+                    const intersects = raycaster.intersectObjects([...this.scene.children].flat(3));
+                    
+                    document.body.style.cursor = intersects.length > 0 ? 'pointer' : 'grab';
+                });
+
+                canvasWrapper.addEventListener('mousemove', (e) => {
+                    if (!this.isDragging && e.buttons !== 1) return;
+                    
+                    this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                    this.mouse.y = -(e.clientY / window.innerHeight) + 1;
+
+                    const isRightClick = e.button === 2 || (e.shiftKey && e.buttons === 1);
+
+                    if (!isRightClick) {
+                        document.body.style.cursor = 'grab';
+                    }
+
+                    // Update status
+                    const rotationMode = this.isAnimating ? 'Animating...' : (this.activeLayer ? `Rotating: ${this.activeLayer}` : 'Idle');
+                    document.getElementById('rotation-mode').textContent = rotationMode;
+                });
+
+                canvasWrapper.addEventListener('mouseup', () => {
+                    if (this.isDragging) {
+                        const deltaX = this.mouse.x - this.dragStartX;
+                        const deltaY = this.mouse.y - this.dragStartY;
+
+                        let rotateAxis, rotateAmount;
+
+                        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                            // Horizontal drag - rotate Y axis
+                            gsap.to(this.cube.rotation, {
+                                y: this.cube.rotation.y + deltaX * 0.5,
+                                duration: 1, ease: "power2.inOut"
+                            });
+
+                            if (this.activeLayer) {
+                                const direction = deltaX > 0 ? -1 : 1;
+                                gsap.to(this.cubies, {
+                                    rotationY: this.cubies.map(c => c.rotation.y + direction * Math.PI / 2),
+                                    duration: 0.5, ease: "power2.inOut"
+                                });
+                            }
+                        } else if (Math.abs(deltaY) > Math.abs(deltaX)) {
+                            // Vertical drag - rotate X axis
+                            gsap.to(this.cube.rotation, {
+                                x: this.cube.rotation.x + deltaY * 0.5,
+                                duration: 1, ease: "power2.inOut"
+                            });
+
+                            if (this.activeLayer) {
+                                const direction = deltaY > 0 ? -1 : 1;
+                                gsap.to(this.cubies, {
+                                    rotationX: this.cubies.map(c => c.rotation.x + direction * Math.PI / 2),
+                                    duration: 0.5, ease: "power2.inOut"
+                                });
+                            }
+                        }
+
+                        this.isDragging = false;
+                    }
+                });
+
+                canvasWrapper.addEventListener('mouseleave', () => {
+                    this.isDragging = false;
+                    document.body.style.cursor = 'grab';
+                });
+
+                // Keyboard controls
+                window.addEventListener('keydown', (e) => {
+                    if (this.isAnimating) return;
+
+                    const keyMap = {
+                        'ArrowUp': 'y',
+                        'ArrowDown': 'y', 
+                        'ArrowLeft': 'x',
+                        'ArrowRight': 'x'
+                    };
+
+                    const axis = keyMap[e.key];
+                    if (axis) {
+                        this.rotateLayer(axis);
+                    }
+                });
+
+                // Pattern buttons
+                document.querySelectorAll('[data-pattern]').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const patternName = btn.dataset.pattern;
+                        this.applyPattern(patternName);
+                        
+                        document.querySelectorAll('[data-pattern]').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                    });
+                });
+
+                // Reset and shuffle buttons
+                document.getElementById('reset-btn').addEventListener('click', () => {
+                    this.resetToScrambled();
+                });
+
+                document.getElementById('shuffle-btn').addEventListener('click', () => {
+                    this.shuffleCube(20);
+                });
+            }
+
+            rotateLayer(axis) {
+                const cubies = [...this.scene.children].filter(child => child instanceof THREE.Mesh);
+                
+                // Find layer to rotate based on current rotation
+                const offset = axis === 'x' ? 1 : (axis === 'y' ? 0.5 : 0.25);
+                const threshold = Math.abs(this.cube.rotation[axis] % (Math.PI * 2)) > offset;
+
+                cubies.forEach(cubie => {
+                    if (cubie.userData.x > offset || cubie.userData.y > offset) {
+                        this.applyRotationToCubies(cubie, axis);
+                    }
+                });
+            }
+
+            applyRotationToCubies(cubie, axis) {
+                const rotationAmount = Math.PI / 2;
+                const direction = -1; // Counter-clockwise
+                
+                cubie.rotation[axis] += rotationAmount * direction;
+                
+                // Update position after rotation
+                if (axis === 'x') {
+                    cubie.position.y -= Math.sin(rotationAmount) * cubie.scale.y;
+                    cubie.position.z += Math.cos(rotationAmount) * cubie.scale.z;
+                } else if (axis === 'y') {
+                    cubie.position.x -= Math.sin(rotationAmount) * cubie.scale.x;
+                    cubie.position.z += Math.cos(rotationAmount) * cubie.scale.z;
+                } else if (axis === 'z') {
+                    cubie.position.x -= Math.sin(rotationAmount) * cubie.scale.x;
+                    cubie.position.y += Math.cos(rotationAmount) * cubie.scale.y;
+                }
+            }
+
+            applyPattern(patternName) {
+                const cubies = [...this.scene.children].filter(c => c instanceof THREE.Mesh);
+
+                switch (patternName) {
+                    case 'cross':
+                        this.applyCrossPattern(cubies);
+                        break;
+                    case 'checker':
+                        this.applyCheckerboard(cubies);
+                        break;
+                    case 'lines':
+                        this.applyLinesPattern(cubies);
+                        break;
+                    case 'spiral':
+                        this.applySpiralPattern(cubies);
+                        break;
+                    case 'gradient':
+                        this.applyGradientPattern(cubies);
+                        break;
+                    case 'solid':
+                        this.applySolidPattern(cubies);
+                        break;
+                }
+            }
+
+            applyCrossPattern(cubies) {
+                cubies.forEach(cubie => {
+                    const mats = cubie.material;
+                    
+                    // Show white center on each face's outer side
+                    if (cubie.position.x === 1) mats[0].color.setHex(0xffffff);
+                    else if (cubie.position.y === 1) mats[2].color.setHex(0xffffff);
+                    else if (cubie.position.z === -1) mats[5].color.setHex(0xffffff);
+
+                    // Color the outer faces with cross pattern colors
+                    if (cubie.position.x === 1) mats[0].color.setHex(0xff0000);
+                    if (cubie.position.y === 1) mats[2].color.setHex(0xffff00);
+                    if (cubie.position.z === -1) mats[5].color.setHex(0x0000ff);
+                });
+            }
+
+            applyCheckerboard(cubies) {
+                cubies.forEach((cubie, index) => {
+                    const isEven = (index % 2 === 0 && Math.random() > 0.5);
+                    
+                    if (isEven) {
+                        cubie.material[1].color.setHex(0xff8800); // Orange left
+                        cubie.material[3].color.setHex(0xffffff); // White bottom
+                        cubie.material[4].color.setHex(0x00ff00); // Green front
+                    } else {
+                        cubie.material[1].color.setHex(0x333333);
+                        cubie.material[3].color.setHex(0xffff00);
+                        cubie.material[4].color.setHex(0x0000ff);
+                    }
+
+                    cubie.userData.patternName = 'checker';
+                });
+            }
+
+            applyLinesPattern(cubies) {
+                // Create line patterns on faces
+                const patterns = [
+                    { x: 1, y: [-1, 0], z: null },
+                    { x: -1, y: [-1, 0], z: null },
+                    { x: null, y: 1, x: [-1, 0] },
+                    { x: null, y: -1, x: [-1, 0] }
+                ];
+
+                patterns.forEach(pos => {
+                    cubies.forEach(cubie => {
+                        if (pos.x !== null && cubie.position.x === pos.x) {
+                            if ((Math.abs(cubie.position.y) + Math.abs(cubie.position.z)) % 2 === 0) {
+                                cubie.material[0].color.setHex(0xffffff);
+                            } else {
+                                cubie.material[0].color.setHex(0x333333);
+                            }
+                        }
+                    });
+                });
+
+                // Apply to other faces too
+                cubies.forEach(cubie => {
+                    if (cubie.position.y === 1) cubie.material[2].color.setHex(0xffffff);
+                    if (cubie.position.z === -1) cubie.material[5].color.setHex(0xffffff);
+                });
+
+                cubies.forEach(cubie => {
+                    cubie.userData.patternName = 'lines';
+                });
+            }
+
+            applySpiralPattern(cubies) {
+                // Create a spiral pattern across the cube
+                cubies.forEach((cubie, index) => {
+                    const angle = (index / 27) * Math.PI * 8;
+                    const radius = 0.5 + (index % 9) * 0.1;
+                    
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+                    
+                    // Assign colors based on spiral position
+                    if ((x > 0 && cubie.position.y > 0) || (y < -0.5)) {
+                        cubie.material[2].color.setHex(0xff6b9d);
+                        cubie.material[4].color.setHex(0xfeebc8);
+                    } else if ((x < 0 && cubie.position.y < 0) || (y > -1.5)) {
+                        cubie.material[3].color.setHex(0x70e0f6);
+                        cubie.material[5].color.setHex(0xff9ff3);
+                    } else {
+                        cubie.material.forEach(mat => mat.color.setHex(0xffffff));
+                    }
+                    
+                    cubie.userData.patternName = 'spiral';
+                });
+            }
+
+            applyGradientPattern(cubies) {
+                // Create a gradient from one corner to another
+                cubies.forEach((cubie, index) => {
+                    const t = (index + 1) / (cubies.length + 1);
+                    
+                    // Interpolate between two colors
+                    const color1 = new THREE.Color(0xff6b9d);
+                    const color2 = new THREE.Color(0x70e0f6);
+                    const gradientColor = color1.clone().lerp(color2, t);
+                    
+                    cubie.material.forEach(mat => {
+                        mat.color.setHex(gradientColor.getHex());
+                    });
+
+                    cubie.userData.patternName = 'gradient';
+                });
+            }
+
+            applySolidPattern(cubies) {
+                // Solid color pattern - each face one color
+                cubies.forEach((cubie, index) => {
+                    const colors = [0xff6b9d, 0x70e0f6, 0xfeca57, 0x48dbfb];
+                    
+                    cubie.material[0].color.setHex(colors[index % 4]); // Right - Pinkish
+                    cubie.material[1].color.setHex(colors[(index + 1) % 4]); // Left - Blue
+                    cubie.material[2].color.setHex(colors[(index + 2) % 4]); // Top - Yellow
+                    cubie.material[3].color.setHex(colors[(index + 3) % 4]); // Bottom - Cyan
+                    cubie.material[4].color.setHex(0x00ff00); // Front - Green
+                    cubie.material[5].color.setHex(0x9b59b6); // Back - Purple
+
+                    cubie.userData.patternName = 'solid';
+                });
+            }
+
+            resetToScrambled() {
+                const cubies = [...this.scene.children].filter(c => c instanceof THREE.Mesh);
+                
+                // Reset positions to grid
+                for (let x = -1; x <= 1; x++) {
+                    for (let y = -1; y <= 1; y++) {
+                        for (let z = -1; z <= 1; z++) {
+                            const cubie = cubies.find(c => 
+                                Math.abs(c.position.x - x) < 0.1 &&
+                                Math.abs(c.position.y - y) < 0.1 &&
+                                Math.abs(c.position.z - z) < 0.1
+                            );
+
+                            if (cubie) {
+                                gsap.to(cubie.rotation, {
+                                    x: cubie.userData.x * Math.PI / 2,
+                                    y: cubie.userData.y * Math.PI / 2,
+                                    z: cubie.userData.z * Math.PI / 2,
+                                    duration: 0.5, ease: "power2.inOut"
+                                });
+
+                                gsap.to(cubie.position, {
+                                    x: x, y: y, z: z,
+                                    duration: 0.5, ease: "power2.inOut",
+                                    onComplete: () => {
+                                        cubie.rotation.set(0, 0, 0);
+                                        cubie.position.set(x, y, z);
+                                        cubie.material.forEach(mat => mat.color.setHex(0x222222));
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            shuffleCube(count = 10) {
+                const axes = ['x', 'y', 'z'];
+                
+                for (let i = 0; i < count; i++) {
+                    const axis = axes[Math.floor(Math.random() * axes.length)];
+                    const cubies = [...this.scene.children].filter(c => c instanceof THREE.Mesh);
+
+                    cubies.forEach((cubie, index) => {
+                        if (Math.random() > 0.3) {
+                            this.applyRotationToCubies(cubie, axis);
+                        }
+                    });
+
+                    // Animate camera movement during shuffle
+                    gsap.to(this.camera.position, {
+                        x: 60 + Math.sin(i * 0.5) * 20,
+                        y: 50 + Math.cos(i * 0.3) * 15,
+                        z: 80 + Math.random() * 20,
+                        duration: 0.3
+                    });
+                }
+
+                // Return camera to original position
+                gsap.to(this.camera.position, {
+                    x: 60, y: 50, z: 80,
+                    duration: 1, ease: "power2.out"
+                });
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                // Render scene with camera following animation
+                if (this.renderer && this.camera) {
+                    this.renderer.render(this.scene, this.camera);
+                }
+            }
+        }
+
+        // Initialize the cube when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new RubiksCube();
+        });
+    </script>
+</body>
+</html>
