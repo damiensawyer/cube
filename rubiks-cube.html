@@ -303,6 +303,7 @@
     <script>
         class RubiksCube {
             constructor() {
+                this.mouse = new THREE.Vector2();
                 this.cube = null;
                 this.cubies = [];
                 this.scene = null;
@@ -440,9 +441,10 @@
                 const canvasWrapper = document.getElementById('canvas-wrapper');
                 
                 canvasWrapper.addEventListener('mousedown', (e) => {
+                    if(!this.mouse) { this.mouse = new THREE.Vector2(); }
                     this.isDragging = true;
-                    this.dragStart.x = e.clientX;
-                    this.dragStart.y = e.clientY;
+                    this.dragStartX = e.clientX;
+                    this.dragStartY = e.clientY;
                     canvasWrapper.style.cursor = 'grabbing';
                     
                     const raycaster = new THREE.Raycaster();
@@ -455,6 +457,7 @@
                 canvasWrapper.addEventListener('mousemove', (e) => {
                     if (!this.isDragging && e.buttons !== 1) return;
                     
+                    if(!this.mouse) { this.mouse = new THREE.Vector2(); }
                     this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
                     this.mouse.y = -(e.clientY / window.innerHeight) + 1;
 
@@ -471,7 +474,10 @@
 
                 canvasWrapper.addEventListener('mouseup', () => {
                     if (this.isDragging) {
+                        // Reset drag start for next time
+                        if(!this.dragStartX || !this.dragStartY) { return; }
                         const deltaX = this.mouse.x - this.dragStartX;
+                        const deltaY = this.mouse.y - this.dragStartY;
                         const deltaY = this.mouse.y - this.dragStartY;
 
                         let rotateAxis, rotateAmount;
@@ -511,7 +517,7 @@
                 });
 
                 canvasWrapper.addEventListener('mouseleave', () => {
-                    this.isDragging = false;
+                    if(this.isDragging) { this.isDragging = false; }
                     document.body.style.cursor = 'grab';
                 });
 

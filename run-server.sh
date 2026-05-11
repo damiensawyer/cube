@@ -14,11 +14,11 @@ sleep 2
 
 # Try to open in browser
 if command -v xdg-open &> /dev/null; then
-    xdg-open http://localhost:8080/rubiks-cube.html 2>/dev/null || echo "Please open http://localhost:8080/rubiks-cube.html in your browser"
+    xdg-open http://localhost:7000/rubiks-cube.html 2>/dev/null || echo "Please open http://localhost:7000/rubiks-cube.html in your browser"
 elif command -v open &> /dev/null; then
-    open http://localhost:8080/rubiks-cube.html
+    open http://localhost:7000/rubiks-cube.html
 else
-    echo "Server running at http://localhost:8080/rubiks-cube.html"
+    echo "Server running at http://localhost:7000/rubiks-cube.html"
 fi
 
 # Keep the script running to maintain background process
