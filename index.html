@@ -424,14 +424,7 @@
                         initialZ: cubie.userData.gridZ,
                         rotX: 0,
                         rotY: 0,
-                        rotZ: 0,
-                        // Track which world direction each material faces
-                        matX: {x:1,y:0,z:0},  // material[0] faces +X
-                        matY: {x:0,y:1,z:0},  // material[1] faces -X
-                        matZ: {x:0,y:0,z:1},  // material[2] faces +Y
-                        matW: {x:0,y:0,z:-1}, // material[3] faces -Y
-                        matW2:{x:0,y:1,z:0},  // material[4] faces +Z
-                        matW3:{x:0,y:-1,z:0}  // material[5] faces -Z
+                        rotZ: 0
                     };
                 });
             }
@@ -566,8 +559,12 @@
                 layerCubies.forEach(cubie => {
                     cubie.rotation[axis] += angle;
 
+                    // Update cumulative rotation tracking
+                    if (axis === 'x') cubie.userData.rotX += direction * Math.PI / 2;
+                    if (axis === 'y') cubie.userData.rotY += direction * Math.PI / 2;
+                    if (axis === 'z') cubie.userData.rotZ += direction * Math.PI / 2;
+
                     // Update grid position using exact integer rotation matrix
-                    // No floating-point accumulation — just swap coordinates with sign flips
                     const oldX = cubie.userData.gridX;
                     const oldY = cubie.userData.gridY;
                     const oldZ = cubie.userData.gridZ;
@@ -584,143 +581,112 @@
                         cubie.userData.gridY =  oldX * d;
                     }
                     
-                    // Update material-to-direction mapping
-                    this.updateMaterialMapping(cubie, axis, direction);
+                    // Update colors based on rotation and initial position
+                    this.updateCubieColors(cubie);
                 });
-            }
-
-            updateMaterialMapping(cubie, axis, direction) {
-                const mats = {
-                    x: {x:1,y:0,z:0},    // material[0] faces +X
-                    y: {x:0,y:1,z:0},    // material[1] faces -X  
-                    z: {x:0,y:0,z:1},    // material[2] faces +Y
-                    w: {x:0,y:0,z:-1},   // material[3] faces -Y
-                    w2:{x:0,y:1,z:0},   // material[4] faces +Z
-                    w3:{x:0,y:-1,z:0}   // material[5] faces -Z
-                };
-
-                // Apply rotation to material directions
-                const rot90 = (a, b, c, d) => a*d - c*b;
-                const rotM90 = (a, b, c, d) => -a*d + c*b;
-
-                if (axis === 'x') {
-                    // Rotate around X axis
-                    // material[2] (+Y) -> +/-Z, material[3] (-Y) -> +/-Z
-                    // material[4] (+Z) -> +/-Y, material[5] (-Z) -> +/-Y
-                    const new2 = {x: mats.z.x, y: direction * mats.w2.y, z: direction * mats.w2.z};
-                    const new3 = {x: mats.w.x, y: -direction * mats.w.y, z: direction * mats.w.z};
-                    const new4 = {x: mats.w2.x, y: direction * mats.w2.y, z: -direction * mats.w2.z};
-                    const new5 = {x: mats.w3.x, y: -direction * mats.w3.y, z: -direction * mats.w3.z};
-                    
-                    cubie.userData.matX = mats.x;
-                    cubie.userData.matY = mats.y;
-                    cubie.userData.matZ = new2;
-                    cubie.userData.matW = new3;
-                    cubie.userData.matW2 = new4;
-                    cubie.userData.matW3 = new5;
-                } else if (axis === 'y') {
-                    // Rotate around Y axis
-                    // material[0] (+X) -> +/-Z, material[1] (-X) -> +/-Z
-                    // material[4] (+Z) -> +/-X, material[5] (-Z) -> +/-X
-                    const new0 = {x: direction * mats.w2.x, y: direction * mats.w2.y, z: -direction * mats.w2.z};
-                    const new1 = {x: -direction * mats.w3.x, y: -direction * mats.w3.y, z: direction * mats.w3.z};
-                    const new4 = {x: -direction * mats.x.x, y: direction * mats.x.y, z: direction * mats.x.z};
-                    const new5 = {x: direction * mats.y.x, y: -direction * mats.y.y, z: -direction * mats.y.z};
-                    
-                    cubie.userData.matX = new0;
-                    cubie.userData.matY = new1;
-                    cubie.userData.matZ = mats.z;
-                    cubie.userData.matW = mats.w;
-                    cubie.userData.matW2 = new4;
-                    cubie.userData.matW3 = new5;
-                } else if (axis === 'z') {
-                    // Rotate around Z axis
-                    // material[0] (+X) -> +/-Y, material[1] (-X) -> +/-Y
-                    // material[2] (+Y) -> +/-X, material[3] (-Y) -> +/-X
-                    const new0 = {x: direction * mats.w2.x, y: -direction * mats.w2.y, z: direction * mats.w2.z};
-                    const new1 = {x: -direction * mats.w3.x, y: direction * mats.w3.y, z: -direction * mats.w3.z};
-                    const new2 = {x: -direction * mats.y.x, y: direction * mats.y.y, z: direction * mats.y.z};
-                    const new3 = {x: direction * mats.x.x, y: -direction * mats.x.y, z: -direction * mats.x.z};
-                    
-                    cubie.userData.matX = new0;
-                    cubie.userData.matY = new1;
-                    cubie.userData.matZ = new2;
-                    cubie.userData.matW = new3;
-                    cubie.userData.matW2 = mats.w2;
-                    cubie.userData.matW3 = mats.w3;
-                }
             }
 
             updateCubieColors(cubie) {
                 const mats = cubie.material;
+                const rotX = cubie.userData.rotX;
+                const rotY = cubie.userData.rotY;
+                const rotZ = cubie.userData.rotZ;
+                const initX = cubie.userData.initialX;
+                const initY = cubie.userData.initialY;
+                const initZ = cubie.userData.initialZ;
                 
                 // Reset to dark
                 mats.forEach(mat => mat.color.setHex(0x111111));
                 
-                // For each world direction, check which material faces it
-                // and apply the appropriate color
-                const faceColors = {
-                    'x+:0xff0000', 'x-:0xff8800',
-                    'y+:0xffff00', 'y-:0xffffff', 
-                    'z+:0x00ff00', 'z-:0x0000ff'
+                // Compute which world direction each material faces
+                // material[0] = +X local, [1] = -X local, [2] = +Y local, [3] = -Y local, [4] = +Z local, [5] = -Z local
+                // After rotations, compute world direction
+                const getWorldDir = (localX, localY, localZ) => {
+                    let x = localX, y = localY, z = localZ;
+                    
+                    // Apply rotations (in order: x, y, z)
+                    // X rotation
+                    if (rotX !== 0) {
+                        const cosX = Math.cos(rotX);
+                        const sinX = Math.sin(rotX);
+                        const ny = y * cosX - z * sinX;
+                        const nz = y * sinX + z * cosX;
+                        y = ny;
+                        z = nz;
+                    }
+                    // Y rotation
+                    if (rotY !== 0) {
+                        const cosY = Math.cos(rotY);
+                        const sinY = Math.sin(rotY);
+                        const nx = x * cosY + z * sinY;
+                        const nz = -x * sinY + z * cosY;
+                        x = nx;
+                        z = nz;
+                    }
+                    // Z rotation
+                    if (rotZ !== 0) {
+                        const cosZ = Math.cos(rotZ);
+                        const sinZ = Math.sin(rotZ);
+                        const nx = x * cosZ - y * sinZ;
+                        const ny = x * sinZ + y * cosZ;
+                        x = nx;
+                        y = ny;
+                    }
+                    
+                    // Normalize to -1, 0, 1
+                    return {
+                        x: Math.abs(x) > 0.9 ? Math.sign(x) : 0,
+                        y: Math.abs(y) > 0.9 ? Math.sign(y) : 0,
+                        z: Math.abs(z) > 0.9 ? Math.sign(z) : 0
+                    };
                 };
                 
-                const gx = cubie.userData.gridX;
-                const gy = cubie.userData.gridY;
-                const gz = cubie.userData.gridZ;
-
-                if (gx === 1) {
-                    const mat = cubie.userData.matX;
-                    if (mat.x === 1) mats[0].color.setHex(0xff0000);
-                    if (mat.y === 1) mats[1].color.setHex(0xffff00);
-                    if (mat.z === 1) mats[2].color.setHex(0x00ff00);
-                    if (mat.w === 1) mats[3].color.setHex(0xffffff);
-                    if (mat.w2 === 1) mats[4].color.setHex(0x00ff00);
-                    if (mat.w3 === 1) mats[5].color.setHex(0x0000ff);
-                } else if (gx === -1) {
-                    const mat = cubie.userData.matY;
-                    if (mat.x === -1) mats[0].color.setHex(0xff8800);
-                    if (mat.y === -1) mats[1].color.setHex(0xffff00);
-                    if (mat.z === -1) mats[2].color.setHex(0x00ff00);
-                    if (mat.w === -1) mats[3].color.setHex(0xffffff);
-                    if (mat.w2 === -1) mats[4].color.setHex(0x00ff00);
-                    if (mat.w3 === -1) mats[5].color.setHex(0x0000ff);
+                // material[0] = +X local
+                const dir0 = getWorldDir(1, 0, 0);
+                // material[1] = -X local
+                const dir1 = getWorldDir(-1, 0, 0);
+                // material[2] = +Y local
+                const dir2 = getWorldDir(0, 1, 0);
+                // material[3] = -Y local
+                const dir3 = getWorldDir(0, -1, 0);
+                // material[4] = +Z local
+                const dir4 = getWorldDir(0, 0, 1);
+                // material[5] = -Z local
+                const dir5 = getWorldDir(0, 0, -1);
+                
+                // Apply colors based on initial position
+                // material[0] should be red if initX=1, orange if initX=-1, black if initX=0
+                if (initX === 1) {
+                    if (dir0.x === 1) mats[0].color.setHex(0xff0000);
+                    if (dir0.y === 1) mats[0].color.setHex(0xffff00);
+                    if (dir0.y === -1) mats[0].color.setHex(0xffffff);
+                    if (dir0.z === 1) mats[0].color.setHex(0x00ff00);
+                    if (dir0.z === -1) mats[0].color.setHex(0x0000ff);
+                } else if (initX === -1) {
+                    if (dir1.x === -1) mats[1].color.setHex(0xff8800);
+                    if (dir1.y === 1) mats[1].color.setHex(0xffff00);
+                    if (dir1.y === -1) mats[1].color.setHex(0xffffff);
+                    if (dir1.z === 1) mats[1].color.setHex(0x00ff00);
+                    if (dir1.z === -1) mats[1].color.setHex(0x0000ff);
                 }
                 
-                if (gy === 1) {
-                    const mat = cubie.userData.matZ;
-                    if (mat.x === 1) mats[0].color.setHex(0xffff00);
-                    if (mat.y === 1) mats[1].color.setHex(0xff8800);
-                    if (mat.z === 1) mats[2].color.setHex(0xffff00);
-                    if (mat.w === 1) mats[3].color.setHex(0xff8800);
-                    if (mat.w2 === 1) mats[4].color.setHex(0xffff00);
-                    if (mat.w3 === 1) mats[5].color.setHex(0xff8800);
-                } else if (gy === -1) {
-                    const mat = cubie.userData.matW;
-                    if (mat.x === -1) mats[0].color.setHex(0xffffff);
-                    if (mat.y === -1) mats[1].color.setHex(0xff8800);
-                    if (mat.z === -1) mats[2].color.setHex(0xffffff);
-                    if (mat.w === -1) mats[3].color.setHex(0xff8800);
-                    if (mat.w2 === -1) mats[4].color.setHex(0xffffff);
-                    if (mat.w3 === -1) mats[5].color.setHex(0xff8800);
+                // Similar for other materials
+                if (initY === 1) {
+                    if (dir2.y === 1) mats[2].color.setHex(0xffff00);
+                    if (dir2.y === -1) mats[2].color.setHex(0xffffff);
+                }
+                if (initY === -1) {
+                    if (dir3.y === 1) mats[3].color.setHex(0xffffff);
+                    if (dir3.y === -1) mats[3].color.setHex(0xffff00);
                 }
                 
-                if (gz === 1) {
-                    const mat = cubie.userData.matW2;
-                    if (mat.x === 1) mats[0].color.setHex(0x00ff00);
-                    if (mat.y === 1) mats[1].color.setHex(0x00ff00);
-                    if (mat.z === 1) mats[2].color.setHex(0x00ff00);
-                    if (mat.w === 1) mats[3].color.setHex(0x00ff00);
-                    if (mat.w2 === 1) mats[4].color.setHex(0x00ff00);
-                    if (mat.w3 === 1) mats[5].color.setHex(0x00ff00);
-                } else if (gz === -1) {
-                    const mat = cubie.userData.matW3;
-                    if (mat.x === -1) mats[0].color.setHex(0x0000ff);
-                    if (mat.y === -1) mats[1].color.setHex(0x0000ff);
-                    if (mat.z === -1) mats[2].color.setHex(0x0000ff);
-                    if (mat.w === -1) mats[3].color.setHex(0x0000ff);
-                    if (mat.w2 === -1) mats[4].color.setHex(0x0000ff);
-                    if (mat.w3 === -1) mats[5].color.setHex(0x0000ff);
+                if (initZ === 1) {
+                    if (dir4.z === 1) mats[4].color.setHex(0x00ff00);
+                    if (dir4.z === -1) mats[4].color.setHex(0x0000ff);
+                }
+                if (initZ === -1) {
+                    if (dir5.z === 1) mats[5].color.setHex(0x0000ff);
+                    if (dir5.z === -1) mats[5].color.setHex(0x00ff00);
                 }
             }
 
