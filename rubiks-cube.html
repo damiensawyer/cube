@@ -302,8 +302,6 @@
 
     <script>
         class RubiksCube {
-            constructor() {
-                this.mouse = new THREE.Vector2();
                 this.cube = null;
                 this.cubies = [];
                 this.scene = null;
@@ -311,8 +309,10 @@
                 this.raycaster = new THREE.Raycaster();
                 
                 // Mouse state
+                this.mouse = new THREE.Vector2();
                 this.isDragging = false;
-                this.dragStart = { x: 0, y: 0 };
+                this.dragStartX = 0;
+                this.dragStartY = 0;
 
                 // Animation state
                 this.isAnimating = false;
@@ -441,7 +441,6 @@
                 const canvasWrapper = document.getElementById('canvas-wrapper');
                 
                 canvasWrapper.addEventListener('mousedown', (e) => {
-                    if(!this.mouse) { this.mouse = new THREE.Vector2(); }
                     this.isDragging = true;
                     this.dragStartX = e.clientX;
                     this.dragStartY = e.clientY;
@@ -457,7 +456,6 @@
                 canvasWrapper.addEventListener('mousemove', (e) => {
                     if (!this.isDragging && e.buttons !== 1) return;
                     
-                    if(!this.mouse) { this.mouse = new THREE.Vector2(); }
                     this.mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
                     this.mouse.y = -(e.clientY / window.innerHeight) + 1;
 
@@ -477,7 +475,6 @@
                         // Reset drag start for next time
                         if(!this.dragStartX || !this.dragStartY) { return; }
                         const deltaX = this.mouse.x - this.dragStartX;
-                        const deltaY = this.mouse.y - this.dragStartY;
                         const deltaY = this.mouse.y - this.dragStartY;
 
                         let rotateAxis, rotateAmount;
