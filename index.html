@@ -373,6 +373,10 @@
                     this.scene.remove(this.cube);
                     this.cubies.forEach(cubie => {
                         cubie.material.forEach(mat => mat.dispose());
+                        cubie.userData.circles.forEach(circle => {
+                            circle.geometry.dispose();
+                            circle.material.dispose();
+                        });
                     });
                     this.cubies = [];
                 }
@@ -408,7 +412,51 @@
                             const cubie = new THREE.Mesh(geometry, materials);
                             cubie.position.set(x * gap, y * gap, z * gap);
 
-                            cubie.userData = { gridX: x, gridY: y, gridZ: z };
+                            // Create circles on each face
+                            const circleRadius = 10;
+                            const circleGeometry = new THREE.SphereGeometry(circleRadius, 16, 16);
+                            
+                            const circles = [];
+                            
+                            // Right face (+X)
+                            if (x === 1) {
+                                const circle = new THREE.Mesh(circleGeometry, materials[0]);
+                                circle.position.set(gap - circleRadius, 0, 0);
+                                circles.push(circle);
+                            }
+                            // Left face (-X)
+                            if (x === -1) {
+                                const circle = new THREE.Mesh(circleGeometry, materials[1]);
+                                circle.position.set(-(gap - circleRadius), 0, 0);
+                                circles.push(circle);
+                            }
+                            // Top face (+Y)
+                            if (y === 1) {
+                                const circle = new THREE.Mesh(circleGeometry, materials[2]);
+                                circle.position.set(0, gap - circleRadius, 0);
+                                circles.push(circle);
+                            }
+                            // Bottom face (-Y)
+                            if (y === -1) {
+                                const circle = new THREE.Mesh(circleGeometry, materials[3]);
+                                circle.position.set(0, -(gap - circleRadius), 0);
+                                circles.push(circle);
+                            }
+                            // Front face (+Z)
+                            if (z === 1) {
+                                const circle = new THREE.Mesh(circleGeometry, materials[4]);
+                                circle.position.set(0, 0, gap - circleRadius);
+                                circles.push(circle);
+                            }
+                            // Back face (-Z)
+                            if (z === -1) {
+                                const circle = new THREE.Mesh(circleGeometry, materials[5]);
+                                circle.position.set(0, 0, -(gap - circleRadius));
+                                circles.push(circle);
+                            }
+
+                            circles.forEach(c => this.cube.add(c));
+                            cubie.userData = { gridX: x, gridY: y, gridZ: z, circles: circles };
                             this.cube.add(cubie);
                             this.cubies.push(cubie);
                         }
@@ -583,6 +631,11 @@
                     
                     // Update colors based on rotation and initial position
                     this.updateCubieColors(cubie);
+                    
+                    // Rotate the circles with the cubie
+                    cubie.userData.circles.forEach(circle => {
+                        circle.rotation[axis] += angle;
+                    });
                 });
             }
 
@@ -710,7 +763,7 @@
             }
 
             applyPattern(patternName) {
-                const cubies = [...this.scene.children].filter(c => c instanceof THREE.Mesh);
+                const cubies = this.cubies.slice();
 
                 switch (patternName) {
                     case 'cross':
@@ -740,17 +793,37 @@
                     const gy = cubie.userData.gridY;
                     const gz = cubie.userData.gridZ;
                     const mats = cubie.material;
+                    const circles = cubie.userData.circles;
 
                     // Reset to default
                     mats.forEach(mat => mat.color.setHex(0x222222));
+                    circles.forEach(c => c.material.color.setHex(0x222222));
 
                     // Apply cross pattern
-                    if (gx === 1) mats[0].color.setHex(0xff0000);
-                    if (gx === -1) mats[1].color.setHex(0xff8800);
-                    if (gy === 1) mats[2].color.setHex(0xffff00);
-                    if (gy === -1) mats[3].color.setHex(0xffffff);
-                    if (gz === 1) mats[4].color.setHex(0x00ff00);
-                    if (gz === -1) mats[5].color.setHex(0x0000ff);
+                    if (gx === 1) {
+                        mats[0].color.setHex(0xff0000);
+                        const circle = circles.find(c => c.position.x > 0); circle.material.color.setHex(0xff0000);
+                    }
+                    if (gx === -1) {
+                        mats[1].color.setHex(0xff8800);
+                        const circle = circles.find(c => c.position.x < 0); circle.material.color.setHex(0xff8800);
+                    }
+                    if (gy === 1) {
+                        mats[2].color.setHex(0xffff00);
+                        const circle = circles.find(c => c.position.y > 0); circle.material.color.setHex(0xffff00);
+                    }
+                    if (gy === -1) {
+                        mats[3].color.setHex(0xffffff);
+                        const circle = circles.find(c => c.position.y < 0); circle.material.color.setHex(0xffffff);
+                    }
+                    if (gz === 1) {
+                        mats[4].color.setHex(0x00ff00);
+                        const circle = circles.find(c => c.position.z > 0); circle.material.color.setHex(0x00ff00);
+                    }
+                    if (gz === -1) {
+                        mats[5].color.setHex(0x0000ff);
+                        const circle = circles.find(c => c.position.z < 0); circle.material.color.setHex(0x0000ff);
+                    }
                 });
             }
 
@@ -759,17 +832,20 @@
                     const gx = cubie.userData.gridX;
                     const gy = cubie.userData.gridY;
                     const isEven = (gx + gy) % 2 === 0;
+                    const mats = cubie.material;
+                    const circles = cubie.userData.circles;
 
-                    cubie.material.forEach(mat => mat.color.setHex(0x222222));
+                    mats.forEach(mat => mat.color.setHex(0x222222));
+                    circles.forEach(c => c.material.color.setHex(0x222222));
 
-                    if (gx === 1 && isEven) cubie.material[0].color.setHex(0xff0000);
-                    if (gx === -1 && isEven) cubie.material[1].color.setHex(0xff8800);
-                    if (gy === 1 && isEven) cubie.material[2].color.setHex(0xffff00);
-                    if (gy === -1 && isEven) cubie.material[3].color.setHex(0xffffff);
-                    if (gz === 1 && isEven) cubie.material[4].color.setHex(0x00ff00);
-                    if (gx === 1 && !isEven) cubie.material[0].color.setHex(0x333333);
-                    if (gx === -1 && !isEven) cubie.material[1].color.setHex(0xffff00);
-                    if (gy === 1 && !isEven) cubie.material[2].color.setHex(0x0000ff);
+                    if (gx === 1 && isEven) { mats[0].color.setHex(0xff0000); const ci = circles.find(ch => ch.position.x > 0); ci.material.color.setHex(0xff0000); }
+                    if (gx === -1 && isEven) { mats[1].color.setHex(0xff8800); const ci = circles.find(ch => ch.position.x < 0); ci.material.color.setHex(0xff8800); }
+                    if (gy === 1 && isEven) { mats[2].color.setHex(0xffff00); const ci = circles.find(ch => ch.position.y > 0); ci.material.color.setHex(0xffff00); }
+                    if (gy === -1 && isEven) { mats[3].color.setHex(0xffffff); const ci = circles.find(ch => ch.position.y < 0); ci.material.color.setHex(0xffffff); }
+                    if (gz === 1 && isEven) { mats[4].color.setHex(0x00ff00); const ci = circles.find(ch => ch.position.z > 0); ci.material.color.setHex(0x00ff00); }
+                    if (gx === 1 && !isEven) { mats[0].color.setHex(0x333333); const ci = circles.find(ch => ch.position.x > 0); ci.material.color.setHex(0x333333); }
+                    if (gx === -1 && !isEven) { mats[1].color.setHex(0xffff00); const ci = circles.find(ch => ch.position.x < 0); ci.material.color.setHex(0xffff00); }
+                    if (gy === 1 && !isEven) { mats[2].color.setHex(0x0000ff); const ci = circles.find(ch => ch.position.y > 0); ci.material.color.setHex(0x0000ff); }
                 });
 
                 cubies.forEach(c => c.userData.patternName = 'checker');
@@ -781,14 +857,34 @@
                     const gy = cubie.userData.gridY;
                     const gz = cubie.userData.gridZ;
                     const mats = cubie.material;
+                    const circles = cubie.userData.circles;
                     mats.forEach(m => m.color.setHex(0x222222));
+                    circles.forEach(c => c.material.color.setHex(0x222222));
 
-                    if (gx === 1) mats[0].color.setHex((gy + gz) % 2 === 0 ? 0xffffff : 0x444444);
-                    if (gx === -1) mats[1].color.setHex((gy + gz) % 2 === 0 ? 0xffffff : 0x444444);
-                    if (gy === 1) mats[2].color.setHex(0xffffff);
-                    if (gy === -1) mats[3].color.setHex(0xffffff);
-                    if (gz === 1) mats[4].color.setHex(0xffffff);
-                    if (gz === -1) mats[5].color.setHex(0xffffff);
+                    if (gx === 1) {
+                        mats[0].color.setHex((gy + gz) % 2 === 0 ? 0xffffff : 0x444444);
+                        const ci = circles.find(ch => ch.position.x > 0); ci.material.color.setHex((gy + gz) % 2 === 0 ? 0xffffff : 0x444444);
+                    }
+                    if (gx === -1) {
+                        mats[1].color.setHex((gy + gz) % 2 === 0 ? 0xffffff : 0x444444);
+                        const ci = circles.find(ch => ch.position.x < 0); ci.material.color.setHex((gy + gz) % 2 === 0 ? 0xffffff : 0x444444);
+                    }
+                    if (gy === 1) {
+                        mats[2].color.setHex(0xffffff);
+                        const ci = circles.find(ch => ch.position.y > 0); ci.material.color.setHex(0xffffff);
+                    }
+                    if (gy === -1) {
+                        mats[3].color.setHex(0xffffff);
+                        const ci = circles.find(ch => ch.position.y < 0); ci.material.color.setHex(0xffffff);
+                    }
+                    if (gz === 1) {
+                        mats[4].color.setHex(0xffffff);
+                        const ci = circles.find(ch => ch.position.z > 0); ci.material.color.setHex(0xffffff);
+                    }
+                    if (gz === -1) {
+                        mats[5].color.setHex(0xffffff);
+                        const ci = circles.find(ch => ch.position.z < 0); ci.material.color.setHex(0xffffff);
+                    }
                 });
                 cubies.forEach(c => c.userData.patternName = 'lines');
             }
@@ -806,11 +902,20 @@
                     if ((x > 0 && cubie.position.y > 0) || (y < -0.5)) {
                         cubie.material[2].color.setHex(0xff6b9d);
                         cubie.material[4].color.setHex(0xfeebc8);
+                        cubie.userData.circles.forEach(c => {
+                            if (c.position.y > 0) c.material.color.setHex(0xff6b9d);
+                            if (c.position.z > 0) c.material.color.setHex(0xfeebc8);
+                        });
                     } else if ((x < 0 && cubie.position.y < 0) || (y > -1.5)) {
                         cubie.material[3].color.setHex(0x70e0f6);
                         cubie.material[5].color.setHex(0xff9ff3);
+                        cubie.userData.circles.forEach(c => {
+                            if (c.position.y < 0) c.material.color.setHex(0x70e0f6);
+                            if (c.position.z < 0) c.material.color.setHex(0xff9ff3);
+                        });
                     } else {
                         cubie.material.forEach(mat => mat.color.setHex(0xffffff));
+                        cubie.userData.circles.forEach(c => c.material.color.setHex(0xffffff));
                     }
 
                     cubie.userData.patternName = 'spiral';
@@ -830,6 +935,9 @@
                     cubie.material.forEach(mat => {
                         mat.color.setHex(gradientColor.getHex());
                     });
+                    cubie.userData.circles.forEach(c => {
+                        c.material.color.setHex(gradientColor.getHex());
+                    });
 
                     cubie.userData.patternName = 'gradient';
                 });
@@ -839,6 +947,7 @@
                 // Solid color pattern - each face one color
                 cubies.forEach((cubie, index) => {
                     const colors = [0xff6b9d, 0x70e0f6, 0xfeca57, 0x48dbfb];
+                    const circles = cubie.userData.circles;
 
                     cubie.material[0].color.setHex(colors[index % 4]); // Right - Pinkish
                     cubie.material[1].color.setHex(colors[(index + 1) % 4]); // Left - Blue
@@ -846,6 +955,16 @@
                     cubie.material[3].color.setHex(colors[(index + 3) % 4]); // Bottom - Cyan
                     cubie.material[4].color.setHex(0x00ff00); // Front - Green
                     cubie.material[5].color.setHex(0x9b59b6); // Back - Purple
+
+                    // Update circles to match face colors
+                    circles.forEach(c => {
+                        if (c.position.x > 0) c.material.color.setHex(colors[index % 4]);
+                        if (c.position.x < 0) c.material.color.setHex(colors[(index + 1) % 4]);
+                        if (c.position.y > 0) c.material.color.setHex(colors[(index + 2) % 4]);
+                        if (c.position.y < 0) c.material.color.setHex(colors[(index + 3) % 4]);
+                        if (c.position.z > 0) c.material.color.setHex(0x00ff00);
+                        if (c.position.z < 0) c.material.color.setHex(0x9b59b6);
+                    });
 
                     cubie.userData.patternName = 'solid';
                 });

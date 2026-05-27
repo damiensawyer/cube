@@ -31,7 +31,7 @@ const createServer = () => {
             
             if (req.url === '/' || req.url === '/rubiks-cube.html' || 
                 req.url === '/index.html' || req.url === '/index.htm') {
-                filePath = path.join(__dirname, 'rubiks-cube.html');
+                filePath = path.join(__dirname, 'index.html');
             } else {
                 filePath = path.join(__dirname, req.url);
             }
